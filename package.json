@@ -4,6 +4,15 @@
   "description": "Lightweight Kimi Computer Use installer and MCP setup for Pi",
   "type": "module",
   "license": "MIT",
+  "author": "specode",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specode/pi-kimi-cu.git"
+  },
+  "homepage": "https://github.com/specode/pi-kimi-cu#readme",
+  "bugs": {
+    "url": "https://github.com/specode/pi-kimi-cu/issues"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -20,6 +29,7 @@
     "skills",
     "src",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "pi": {

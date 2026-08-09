@@ -1,38 +1,46 @@
 # pi-kimi-cu
 
-面向 Pi 的轻量级 Kimi Computer Use 安装与接入包，不依赖 Kimi Code。
+[中文](./README.zh-CN.md)
 
-它提供：
+A lightweight Pi package for installing and wiring up [Kimi Computer Use](https://www.kimi.com/) on macOS. It does not depend on Kimi Code.
 
-- `/kimi-cu` 安装、更新、修复和分层状态检测；
-- `KimiCU.app` 临时下载、验证、带回滚替换及临时目录清理；
-- launchd 后台服务注册和 macOS 权限引导；
-- 可选安装 `pi-mcp-adapter`；
-- Pi 专用、通用全局、自定义路径和手动片段四种 MCP 配置方式；
-- 一份为 Pi 编写的 KimiCU 使用 skill。
+## What you get
 
-## 要求
+- `/kimi-cu` — install, update, repair, and layered status checks
+- Safe install of `KimiCU.app` — download to a temp dir, verify, replace with rollback, then clean up
+- launchd background service setup and macOS permission guidance
+- Optional install of [`pi-mcp-adapter`](https://www.npmjs.com/package/pi-mcp-adapter)
+- Four MCP wiring options: Pi-native, global config, custom path, or a copy-paste snippet
+- A Pi skill for driving KimiCU once it is connected
 
-- Apple Silicon Mac；
-- macOS 14 或更高版本；
-- Pi；
-- Node.js 20 或更高版本。
+## Requirements
 
-## 安装
+- Apple Silicon Mac
+- macOS 14 or later
+- [Pi](https://pi.dev)
+- Node.js 20+
 
-从本地目录安装：
+## Install
+
+From a local checkout:
 
 ```bash
 pi install ~/Code/pi-kimi-cu
 ```
 
-然后重启 Pi，运行：
+Or from git:
+
+```bash
+pi install git:github.com/specode/pi-kimi-cu
+```
+
+Restart Pi, then run:
 
 ```text
 /kimi-cu
 ```
 
-也可以直接使用：
+Commands:
 
 ```text
 /kimi-cu status
@@ -45,13 +53,13 @@ pi install ~/Code/pi-kimi-cu
 
 ## MCP
 
-推荐使用 `pi-mcp-adapter`。如果尚未安装，`/kimi-cu mcp` 会先询问，再运行：
+`pi-mcp-adapter` is the recommended path. If it is missing, `/kimi-cu mcp` will ask before running:
 
 ```bash
 pi install npm:pi-mcp-adapter
 ```
 
-使用其他 MCP adapter 时，可以选择写入 `~/.config/mcp/mcp.json`、指定其他 JSON 文件，或只显示以下标准配置片段：
+With another MCP adapter, you can write `~/.config/mcp/mcp.json`, point at a custom JSON file, or just copy this snippet:
 
 ```json
 {
@@ -64,16 +72,20 @@ pi install npm:pi-mcp-adapter
 }
 ```
 
-扩展只会迁移自己能够明确识别的旧版 KimiCU 配置。遇到同名自定义 server、损坏的 JSON 或无法读取的文件时会停止，不会覆盖原内容。
+The extension only migrates old KimiCU config it can positively identify. If it hits a same-named custom server, broken JSON, or an unreadable file, it stops instead of overwriting anything.
 
-## 安全说明
+## Security
 
-App 下载自 Moonshot AI 的官方 CDN。安装前会检查 Bundle ID、arm64 架构、签名 Team ID，并运行严格的 `codesign` 校验。签名校验失败时默认中止；只有用户在交互提示中明确确认后才会继续。
+The app is downloaded from Moonshot AI’s official CDN. Before install it checks Bundle ID, arm64 architecture, signing Team ID, and runs a strict `codesign` verification. Failed signature checks abort by default; install continues only if you explicitly confirm in the interactive prompt.
 
-系统的辅助功能和屏幕录制权限必须由用户在 macOS 系统设置中手动授予。
+Accessibility and Screen Recording must be granted by you in System Settings. The package cannot flip those switches for you.
 
-## 开发检查
+## Development
 
 ```bash
 npm run check
 ```
+
+## License
+
+MIT
