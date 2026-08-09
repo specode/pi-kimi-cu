@@ -110,22 +110,22 @@ export function mergeMcpConfigValue(
   value,
   { serverName = MCP_SERVER_NAME, appPath = DEFAULT_APP_PATH } = {},
 ) {
-  if (!isPlainObject(value)) throw new Error("MCP 配置根节点必须是 JSON 对象");
+  if (!isPlainObject(value)) throw new Error("MCP 配置根节点必须是 JSON 对象 / MCP config root must be a JSON object");
   const hasCanonicalServers = Object.hasOwn(value, "mcpServers");
   const hasLegacyServers = Object.hasOwn(value, "mcp-servers");
   const canonicalServers = hasCanonicalServers ? value.mcpServers : {};
   const legacyServers = hasLegacyServers ? value["mcp-servers"] : {};
   if (!isPlainObject(canonicalServers)) {
-    throw new Error('MCP 配置中的 "mcpServers" 必须是对象');
+    throw new Error('MCP 配置中的 \"mcpServers\" 必须是对象 / mcpServers must be an object');
   }
   if (!isPlainObject(legacyServers)) {
-    throw new Error('MCP 配置中的 "mcp-servers" 必须是对象');
+    throw new Error('MCP 配置中的 \"mcp-servers\" 必须是对象 / mcp-servers must be an object');
   }
   const currentServers = { ...legacyServers, ...canonicalServers };
 
   const current = currentServers[serverName];
   if (current !== undefined && !isManagedKimiCuEntry(current, appPath)) {
-    throw new Error(`MCP server "${serverName}" 已存在且不是本扩展管理的 KimiCU 配置`);
+    throw new Error(`MCP server "${serverName}" 已存在且不是本扩展管理的 KimiCU 配置 / already exists and is not managed by this extension`);
   }
 
   const nextEntry = kimiCuServerDefinition(appPath);
@@ -156,7 +156,7 @@ export async function writeMcpConfig(
   } catch (error) {
     if (!error || typeof error !== "object" || error.code !== "ENOENT") {
       if (error instanceof SyntaxError) {
-        throw new Error(`现有 MCP 配置不是有效 JSON：${configPath}`, { cause: error });
+        throw new Error(`现有 MCP 配置不是有效 JSON / existing MCP config is not valid JSON：${configPath}`, { cause: error });
       }
       throw error;
     }

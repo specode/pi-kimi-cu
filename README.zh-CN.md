@@ -6,11 +6,11 @@
 
 ## 能做什么
 
-- `/kimi-cu`：安装、更新、修复，以及分层状态检测
+- `/kimi-cu`：两个入口——检查状态、引导配置
 - 安全安装 `KimiCU.app`：下到临时目录、校验、带回滚替换，再清理现场
-- 注册 launchd 后台服务，并引导 macOS 权限
+- 注册 launchd 后台服务；权限交给官方 KimiCU App 窗口处理
 - 可选安装 [`pi-mcp-adapter`](https://www.npmjs.com/package/pi-mcp-adapter)
-- 四种 MCP 接入方式：Pi 专用、全局配置、自定义路径，或只给可复制片段
+- MCP 接入：引导配置走默认 Pi 路径；需要时可用 `/kimi-cu mcp` 选其他方式
 - 一份接好后给 Pi 用的 KimiCU skill
 
 ## 环境要求
@@ -49,23 +49,35 @@ pi install ~/Code/pi-kimi-cu
 可用命令：
 
 ```text
-/kimi-cu status
-/kimi-cu install
-/kimi-cu repair
-/kimi-cu update
-/kimi-cu mcp
-/kimi-cu permissions
+/kimi-cu status   # 检查状态
+/kimi-cu setup    # 引导配置
 ```
+
+## 交互说明
+
+1. **检查状态**：平台、App、后台服务、权限、MCP 配置与运行状态。
+2. **引导配置**：按缺口逐步处理——
+   - App 未安装 → 询问是否下载安装
+   - 后台服务未运行 → 询问是否注册启动
+   - 权限未齐 → 打开 KimiCU App，请你在官方窗口里确认 Accessibility / Screen Recording
+   - MCP 未配置 → 询问是否写入默认 Pi MCP 配置
+   - MCP 未连接 → 询问是否 `/reload`
 
 ## MCP
 
-推荐走 `pi-mcp-adapter`。如果还没装，`/kimi-cu mcp` 会先问你，再执行：
+推荐走 `pi-mcp-adapter`。引导配置时若缺失会先询问是否安装：
 
 ```bash
 pi install npm:pi-mcp-adapter
 ```
 
-用别的 MCP adapter 时，可以写入 `~/.config/mcp/mcp.json`、指定其他 JSON 文件，或直接复制下面这段：
+需要自定义路径或只看配置片段时：
+
+```text
+/kimi-cu mcp
+```
+
+通用片段：
 
 ```json
 {
@@ -84,7 +96,7 @@ pi install npm:pi-mcp-adapter
 
 App 从 Moonshot AI 官方 CDN 下载。安装前会检查 Bundle ID、arm64 架构、签名 Team ID，并做严格 `codesign` 校验。签名校验失败时默认中止；只有你在交互提示里明确确认后才会继续。
 
-辅助功能和屏幕录制必须你在「系统设置」里手动授权，这个包没法替你打开。
+辅助功能和屏幕录制由官方 KimiCU App 引导授权，本包不会代你拨动系统开关。
 
 ## 开发检查
 

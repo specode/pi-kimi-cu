@@ -9,7 +9,7 @@ Use the KimiCU MCP server for macOS application interaction. It works through a 
 
 ## Before operating an app
 
-1. If KimiCU tools are missing or fail to connect, ask the user to run `/kimi-cu status` and then `/kimi-cu repair` if needed.
+1. If KimiCU tools are missing or fail to connect, ask the user to run `/kimi-cu status` and then `/kimi-cu setup` if needed.
 2. With `pi-mcp-adapter`, discover the KimiCU tools through the `mcp` proxy. With another MCP adapter, use the equivalent directly exposed tools.
 3. Start with `list_apps`, then call `get_app_state` for the target application.
 

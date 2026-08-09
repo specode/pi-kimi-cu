@@ -6,11 +6,11 @@ A lightweight Pi package for installing and wiring up [Kimi Computer Use](https:
 
 ## What you get
 
-- `/kimi-cu` — install, update, repair, and layered status checks
+- `/kimi-cu` — two actions: check status, guided setup
 - Safe install of `KimiCU.app` — download to a temp dir, verify, replace with rollback, then clean up
-- launchd background service setup and macOS permission guidance
+- launchd background service setup; permissions are handled in the official KimiCU app UI
 - Optional install of [`pi-mcp-adapter`](https://www.npmjs.com/package/pi-mcp-adapter)
-- Four MCP wiring options: Pi-native, global config, custom path, or a copy-paste snippet
+- MCP wiring: guided setup uses the default Pi path; `/kimi-cu mcp` keeps the advanced chooser
 - A Pi skill for driving KimiCU once it is connected
 
 ## Requirements
@@ -49,23 +49,35 @@ Restart Pi, then run:
 Commands:
 
 ```text
-/kimi-cu status
-/kimi-cu install
-/kimi-cu repair
-/kimi-cu update
-/kimi-cu mcp
-/kimi-cu permissions
+/kimi-cu status   # check status
+/kimi-cu setup    # guided setup
 ```
+
+## Interaction
+
+1. **Check status** — platform, app, background service, permissions, MCP config and runtime.
+2. **Guided setup** — walk missing pieces only:
+   - App missing → offer official CDN install
+   - Service not running → offer register/start
+   - Permissions missing → open KimiCU.app and ask you to set Accessibility / Screen Recording to Allowed
+   - MCP not configured → offer default Pi MCP config
+   - MCP not connected → offer `/reload`
 
 ## MCP
 
-`pi-mcp-adapter` is the recommended path. If it is missing, `/kimi-cu mcp` will ask before running:
+`pi-mcp-adapter` is recommended. Guided setup asks before installing it when missing:
 
 ```bash
 pi install npm:pi-mcp-adapter
 ```
 
-With another MCP adapter, you can write `~/.config/mcp/mcp.json`, point at a custom JSON file, or just copy this snippet:
+For a custom path or a copy-paste snippet:
+
+```text
+/kimi-cu mcp
+```
+
+Snippet:
 
 ```json
 {
@@ -84,7 +96,7 @@ The extension only migrates old KimiCU config it can positively identify. If it 
 
 The app is downloaded from Moonshot AI’s official CDN. Before install it checks Bundle ID, arm64 architecture, signing Team ID, and runs a strict `codesign` verification. Failed signature checks abort by default; install continues only if you explicitly confirm in the interactive prompt.
 
-Accessibility and Screen Recording must be granted by you in System Settings. The package cannot flip those switches for you.
+Accessibility and Screen Recording are granted through the official KimiCU app UI. This package does not flip those system toggles for you.
 
 ## Development
 
