@@ -1,5 +1,5 @@
 # Publish to npm via Trusted Publisher (OIDC). No long-lived npm token.
-# Triggers only when a GitHub Release is created.
+# Requires npm CLI >= 11.5.1 and Node >= 22.14.
 # Docs: https://docs.npmjs.com/trusted-publishers/
 
 name: Node.js Package
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - run: npm ci
       - run: npm test
 
@@ -30,8 +30,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      # Trusted Publisher: do not set NODE_AUTH_TOKEN
-      - run: npm publish --provenance --access public
+      # Trusted Publisher handles auth via OIDC; provenance is automatic.
+      - run: npm publish --access public
