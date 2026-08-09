@@ -1,5 +1,5 @@
 {
-  "name": "pi-kimi-cu",
+  "name": "@specode/pi-kimi-cu",
   "version": "0.1.0",
   "description": "Lightweight Kimi Computer Use installer and MCP setup for Pi",
   "type": "module",

@@ -22,16 +22,22 @@
 
 ## 安装
 
+从 npm：
+
+```bash
+pi install npm:@specode/pi-kimi-cu
+```
+
+从 git：
+
+```bash
+pi install git:github.com/specode/pi-kimi-cu
+```
+
 本地目录：
 
 ```bash
 pi install ~/Code/pi-kimi-cu
-```
-
-或从 git：
-
-```bash
-pi install git:github.com/specode/pi-kimi-cu
 ```
 
 重启 Pi，然后执行：

@@ -22,16 +22,22 @@ A lightweight Pi package for installing and wiring up [Kimi Computer Use](https:
 
 ## Install
 
+From npm:
+
+```bash
+pi install npm:@specode/pi-kimi-cu
+```
+
+From git:
+
+```bash
+pi install git:github.com/specode/pi-kimi-cu
+```
+
 From a local checkout:
 
 ```bash
 pi install ~/Code/pi-kimi-cu
-```
-
-Or from git:
-
-```bash
-pi install git:github.com/specode/pi-kimi-cu
 ```
 
 Restart Pi, then run:
