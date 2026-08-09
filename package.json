@@ -1,0 +1,37 @@
+{
+  "name": "pi-kimi-cu",
+  "version": "0.1.0",
+  "description": "Lightweight Kimi Computer Use installer and MCP setup for Pi",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "kimi",
+    "computer-use",
+    "mcp",
+    "macos"
+  ],
+  "files": [
+    "extensions",
+    "skills",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/kimi-cu.js"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check extensions/kimi-cu.js && node --check src/constants.js && node --check src/installer.js && node --check src/mcp-config.js && node --check src/status.js && npm test"
+  }
+}
