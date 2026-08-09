@@ -477,40 +477,38 @@ test("replacement script quotes generated paths and includes rollback", () => {
 	assert.equal(syntax.status, 0, syntax.stderr);
 });
 
-test(
-	"replacement script installs the staged app and removes its backup",
-	{ skip: process.platform !== "darwin" ? "requires macOS /usr/bin/ditto" : false },
-	async () => {
-		const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-replace-"));
-		try {
-			const source = path.join(root, "source", "KimiCU.app");
-			const target = path.join(root, "Applications", "KimiCU.app");
-			await mkdir(source, { recursive: true });
-			await mkdir(target, { recursive: true });
-			await writeFile(path.join(source, "version"), "new");
-			await writeFile(path.join(target, "version"), "old");
-			const script = buildReplacementScript(source, target, "integration");
-			const result = spawnSync("/bin/sh", ["-c", script], {
-				encoding: "utf8",
-			});
-			assert.equal(result.status, 0, result.stderr);
-			assert.equal(await readFile(path.join(target, "version"), "utf8"), "new");
-			await assert.rejects(
-				readFile(
-					path.join(
-						root,
-						"Applications",
-						".KimiCU.app.backup-integration",
-						"version",
-					),
+test("replacement script installs the staged app and removes its backup", {
+	skip: process.platform !== "darwin" ? "requires macOS /usr/bin/ditto" : false,
+}, async () => {
+	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-replace-"));
+	try {
+		const source = path.join(root, "source", "KimiCU.app");
+		const target = path.join(root, "Applications", "KimiCU.app");
+		await mkdir(source, { recursive: true });
+		await mkdir(target, { recursive: true });
+		await writeFile(path.join(source, "version"), "new");
+		await writeFile(path.join(target, "version"), "old");
+		const script = buildReplacementScript(source, target, "integration");
+		const result = spawnSync("/bin/sh", ["-c", script], {
+			encoding: "utf8",
+		});
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(await readFile(path.join(target, "version"), "utf8"), "new");
+		await assert.rejects(
+			readFile(
+				path.join(
+					root,
+					"Applications",
+					".KimiCU.app.backup-integration",
+					"version",
 				),
-				/ENOENT/,
-			);
-		} finally {
-			await rm(root, { recursive: true, force: true });
-		}
-	},
-);
+			),
+			/ENOENT/,
+		);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
 
 test("accepts an Apple Silicon host when Pi runs as x64 under Rosetta", async () => {
 	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-rosetta-"));
