@@ -1,6 +1,6 @@
 {
   "name": "@specode/pi-kimi-cu",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Lightweight Kimi Computer Use installer and MCP setup for Pi",
   "type": "module",
   "license": "MIT",
