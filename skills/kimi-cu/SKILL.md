@@ -10,7 +10,7 @@ Use the KimiCU MCP server for macOS application interaction. It works through a 
 ## Before operating an app
 
 1. If KimiCU tools are missing or fail to connect, ask the user to run `/kimi-cu status` and then `/kimi-cu setup` if needed.
-2. With `pi-mcp-adapter`, discover the KimiCU tools through the `mcp` proxy. With another MCP adapter, use the equivalent directly exposed tools.
+2. This package requires Pi >=0.99.0 and its built-in MCP support. Use `/mcp` to check the `kimi-cu` connection. With the default `codemode` exposure, discover tools using `searchTools("kimi")` and inspect their schemas with `describeTool(name)`. Use the returned tool names instead of hard-coding them (Pi’s name normalization changed in 0.99.2). Call them from codemode; forward image blocks with `image(block)`, not `text()`. With `direct` exposure, call the declared tools directly. Do not look for the old adapter’s `mcp` proxy.
 3. Start with `list_apps`, then call `get_app_state` for the target application.
 
 ## Interaction loop

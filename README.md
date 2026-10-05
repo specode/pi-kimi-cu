@@ -9,16 +9,24 @@ A lightweight Pi package for installing and wiring up [Kimi Computer Use](https:
 - `/kimi-cu` — two actions: check status, guided setup
 - Safe install of `KimiCU.app` — download to a temp dir, verify, replace with rollback, then clean up
 - launchd background service setup; permissions are handled in the official KimiCU app UI
-- Optional install of [`pi-mcp-adapter`](https://www.npmjs.com/package/pi-mcp-adapter)
-- MCP wiring: guided setup uses the default Pi path; `/kimi-cu mcp` keeps the advanced chooser
+- Uses Pi’s built-in MCP; no third-party adapter installation or dependency
+- Guided setup writes Pi’s global config; `/kimi-cu mcp` offers global, trusted-project, or snippet-only setup
 - A Pi skill for driving KimiCU once it is connected
 
 ## Requirements
 
 - Apple Silicon Mac
 - macOS 14 or later
-- [Pi](https://pi.dev)
-- Node.js 20+
+- [Pi](https://pi.dev) **>=0.99.0**, with built-in MCP enabled (1.0.2 or newer recommended)
+- Node.js >=22.19.0
+
+Package **2.x** supports built-in MCP only. On older Pi (<0.99.0), pin the legacy plugin instead of upgrading to 2.x:
+
+```bash
+pi install npm:@specode/pi-kimi-cu@1.0.0
+```
+
+The legacy version keeps its adapter-based integration. This package does not automatically downgrade or install a legacy adapter.
 
 ## Install
 
@@ -61,21 +69,22 @@ Commands:
    - Service not running → offer register/start
    - Permissions missing → open KimiCU.app and ask you to set Accessibility / Screen Recording to Allowed
    - MCP not configured → offer default Pi MCP config
-   - MCP not connected → offer `/reload`
+   - After writing config → offer `/reload`; use Pi’s built-in `/mcp` for authoritative connection status
 
 ## MCP
 
-`pi-mcp-adapter` is recommended. Guided setup asks before installing it when missing:
+The default is `~/.pi/agent/mcp.json` (respecting `PI_CODING_AGENT_DIR`); trusted projects can use `.pi/mcp.json`. Adapter-only shared paths, project `.mcp.json`, and `--mcp-config` are no longer read.
 
-```bash
-pi install npm:pi-mcp-adapter
-```
+Migrating from the legacy version:
 
-For a custom path or a copy-paste snippet:
+1. Back up your old adapter configuration. You can now uninstall `pi-mcp-adapter` yourself, or disable it in `pi config`; built-in MCP replaces it. An adapter registering `/mcp` prevents built-in MCP from taking over.
+2. Manually copy the servers you need into Pi’s `mcp.json`, under `mcpServers`. Convert adapter-only options yourself: in particular, replace `disabled: true` with `enabled: false` and remove the old `disabled` field. Do not copy `mcp-servers` unchanged.
+3. This package does not migrate, uninstall, or delete anything for you. `/kimi-cu mcp` only adds a missing KimiCU entry or shows a snippet; legacy configuration is left untouched with manual instructions.
+4. After completing the above, run `/reload` and verify `kimi-cu` enabled state, connection, and exposure in built-in `/mcp`. If built-in MCP is disabled, enable it under Built-in in `pi config`.
 
-```text
-/kimi-cu mcp
-```
+`/kimi-cu status` checks local setup and configuration only; neither an existing config nor registered tools proves a live connection. Default `codemode` exposure uses `searchTools()` to discover tools; choose `direct` in `/mcp` for directly declared tools.
+
+Pi >=1.0.1 supports project-only overrides of `enabled`, `exposure`, and `toolExposure`; use full project definitions on 0.99.x/1.0.0. Disable a server with `enabled: false`. Existing native settings and command arguments are preserved; legacy fields are not automatically converted.
 
 Snippet:
 
@@ -90,7 +99,7 @@ Snippet:
 }
 ```
 
-The extension only migrates old KimiCU config it can positively identify. If it hits a same-named custom server, broken JSON, or an unreadable file, it stops instead of overwriting anything.
+Config writes refuse legacy `mcp-servers` or a KimiCU `disabled` field, custom same-named servers, namespace collisions such as `kimi_cu`, and broken or unreadable target files. Conflicts are also checked across active global and trusted-project files. A new project definition is also refused when a global entry with the same name already exists: use `/mcp` to change it explicitly, rather than silently replacing inherited disabled state, tool restrictions, or other settings. If the global JSON or its root/server-map structure is invalid, creating a project definition is refused until it is repaired. Existing project entries remain unchanged. Status detection keeps diagnostics separate from the effective config: malformed files or invalid server fields do not hide a valid definition in another layer; valid custom project servers still take precedence and are reported as conflicts.
 
 ## Security
 

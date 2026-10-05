@@ -1,8 +1,5 @@
-import { homedir } from "node:os";
-import path from "node:path";
-
 import {
-	detectPiMcpAdapter,
+	MCP_MIGRATION_GUIDANCE,
 	mcpConfigPaths,
 	mcpConfigSnippet,
 	writeMcpConfig,
@@ -14,7 +11,6 @@ import {
 } from "../src/installer.js";
 import { detectKimiCu, formatKimiCuStatus } from "../src/status.js";
 
-const MCP_STATUS_EVENT = "pi-mcp-adapter/status/v1";
 const MENU = {
 	status: "检查状态 / Check status",
 	setup: "引导配置 / Guided setup",
@@ -32,11 +28,6 @@ function extensionExec(pi) {
 				"命令被终止（可能超时） / Command terminated (possible timeout)",
 		};
 	};
-}
-
-function mcpConfigOverride(pi) {
-	const value = pi.getFlag?.("mcp-config");
-	return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function requireUi(ctx, action) {
@@ -58,31 +49,18 @@ function operationLabel(step, percent) {
 	return "处理 KimiCU / Working on KimiCU";
 }
 
-function mcpRuntime(adapterSnapshot) {
-	if (!adapterSnapshot || !Array.isArray(adapterSnapshot.servers))
-		return undefined;
-	return adapterSnapshot.servers.find((server) => server?.name === "kimi-cu");
-}
-
-function isMcpConnected(adapterSnapshot) {
-	const runtime = mcpRuntime(adapterSnapshot);
-	if (!runtime) return false;
-	const status = String(runtime.status ?? "").toLowerCase();
-	return status === "connected" || status === "ready" || status === "ok";
-}
-
 async function detect(pi, ctx) {
 	return detectKimiCu({
 		exec: extensionExec(pi),
 		cwd: ctx.cwd,
-		mcpConfigPath: mcpConfigOverride(pi),
+		projectTrusted: ctx.isProjectTrusted(),
 	});
 }
 
-async function showStatus(pi, ctx, adapterSnapshot) {
+async function showStatus(pi, ctx) {
 	const status = await detect(pi, ctx);
 	ctx.ui.notify(
-		formatKimiCuStatus(status, adapterSnapshot),
+		formatKimiCuStatus(status),
 		status.ready ? "info" : "warning",
 	);
 	return status;
@@ -93,7 +71,7 @@ async function maybeReload(ctx, lifecycle) {
 	if (
 		await ctx.ui.confirm(
 			"重新加载 Pi / Reload Pi",
-			"MCP 配置已更新。现在重新加载扩展和 MCP adapter？ / MCP config updated. Reload extensions and the MCP adapter now?",
+			"现在重新加载 Pi 并连接内置 MCP？ / Reload Pi and connect its built-in MCP now?",
 		)
 	) {
 		ctx.ui.setStatus("kimi-cu", undefined);
@@ -108,120 +86,47 @@ async function maybeReload(ctx, lifecycle) {
 	return false;
 }
 
-async function installAdapter(pi, ctx, message) {
-	const approved = await ctx.ui.confirm(
-		"安装 pi-mcp-adapter / Install pi-mcp-adapter",
-		message,
-	);
-	if (!approved) return false;
-	ctx.ui.setStatus(
-		"kimi-cu",
-		"安装 pi-mcp-adapter / Installing pi-mcp-adapter",
-	);
-	const installed = await extensionExec(pi)(
-		"pi",
-		["install", "npm:pi-mcp-adapter"],
-		{
-			timeout: 180_000,
-		},
-	);
-	ctx.ui.setStatus("kimi-cu", undefined);
-	if (installed.code !== 0) {
-		throw new Error(
-			`pi-mcp-adapter 安装失败 / install failed：${installed.stderr || installed.stdout}`,
-		);
-	}
-	return true;
-}
-
-async function configureMcp(pi, ctx, lifecycle, { interactive = true } = {}) {
+async function configureMcp(ctx, lifecycle, { interactive = true } = {}) {
 	if (!requireUi(ctx, "配置 MCP / Configure MCP")) return;
-
-	const paths = mcpConfigPaths({
-		cwd: ctx.cwd,
-		overridePath: mcpConfigOverride(pi),
+	ctx.ui.notify(MCP_MIGRATION_GUIDANCE, "info");
+	const paths = mcpConfigPaths({ cwd: ctx.cwd });
+	let configPath = paths.piGlobal;
+	if (interactive) {
+		const globalChoice = "Pi 全局配置 / Pi global config";
+		const projectChoice = "当前可信项目 / Current trusted project";
+		const manualChoice = "只显示配置片段 / Show config snippet only";
+		const choices = [globalChoice];
+		if (ctx.isProjectTrusted()) choices.push(projectChoice);
+		choices.push(manualChoice);
+		const choice = await ctx.ui.select("KimiCU 内置 MCP / Built-in MCP", choices);
+		if (!choice) return;
+		if (choice === manualChoice) {
+			await ctx.ui.editor("KimiCU MCP config", mcpConfigSnippet());
+			return { reloaded: false };
+		}
+		if (choice === projectChoice) {
+			if (!ctx.isProjectTrusted()) return;
+			configPath = paths.projectPi;
+		}
+	}
+	const result = await writeMcpConfig(configPath, {
+		allowProjectOverride: configPath === paths.projectPi,
+		otherConfigPaths: [paths.piGlobal, ...(ctx.isProjectTrusted() ? [paths.projectPi] : [])],
 	});
-	const override = mcpConfigOverride(pi);
-
-	// Guided setup uses a simple default path; /kimi-cu mcp keeps the full chooser.
-	if (!interactive) {
-		const adapter = await detectPiMcpAdapter({ cwd: ctx.cwd });
-		if (!adapter.installed) {
-			await installAdapter(
-				pi,
-				ctx,
-				"推荐安装 pi-mcp-adapter 以便 Pi 连接 KimiCU。将运行：pi install npm:pi-mcp-adapter。继续？ / Recommended so Pi can connect to KimiCU. Will run: pi install npm:pi-mcp-adapter. Continue?",
-			);
-		}
-		const configPath = override || paths.piGlobal;
-		const result = await writeMcpConfig(configPath);
-		ctx.ui.notify(
-			result.changed
-				? `已更新 MCP 配置 / Updated MCP config：${result.configPath}`
-				: `MCP 配置已经是最新状态 / MCP config already up to date：${result.configPath}`,
-			"info",
-		);
-		return { reloaded: await maybeReload(ctx, lifecycle) };
-	}
-
-	const adapter = await detectPiMcpAdapter({ cwd: ctx.cwd });
-	const adapterChoice = adapter.installed
-		? "Pi 专用配置（pi-mcp-adapter，已安装） / Pi-native config (pi-mcp-adapter installed)"
-		: "Pi 专用配置（安装 pi-mcp-adapter） / Pi-native config (install pi-mcp-adapter)";
-	const sharedChoice = `通用全局配置 / Shared global config（${paths.sharedGlobal}）`;
-	const customChoice = "其他 MCP JSON 路径 / Custom MCP JSON path";
-	const manualChoice = "只显示配置片段 / Show config snippet only";
-	const choice = await ctx.ui.select("KimiCU MCP 接入方式 / MCP wiring", [
-		adapterChoice,
-		sharedChoice,
-		customChoice,
-		manualChoice,
-	]);
-	if (!choice) return;
-
-	if (choice === manualChoice) {
-		await ctx.ui.editor(
-			"复制 KimiCU MCP 配置 / Copy KimiCU MCP config",
-			mcpConfigSnippet(),
-		);
-		return { reloaded: false };
-	}
-
-	let configPath;
-	if (choice === adapterChoice) {
-		if (!adapter.installed) {
-			const installed = await installAdapter(
-				pi,
-				ctx,
-				"将运行：pi install npm:pi-mcp-adapter。继续？ / Will run: pi install npm:pi-mcp-adapter. Continue?",
-			);
-			if (!installed) return;
-		}
-		configPath = paths.piGlobal;
-	} else if (choice === sharedChoice) {
-		configPath = paths.sharedGlobal;
-	} else {
-		const input = await ctx.ui.input(
-			"MCP JSON 路径 / MCP JSON path",
-			paths.piGlobal,
-		);
-		if (!input?.trim()) return;
-		configPath = input.trim().startsWith("~/")
-			? path.join(homedir(), input.trim().slice(2))
-			: path.resolve(ctx.cwd, input.trim());
-	}
-
-	const result = await writeMcpConfig(configPath);
 	ctx.ui.notify(
 		result.changed
 			? `已更新 MCP 配置 / Updated MCP config：${result.configPath}`
-			: `MCP 配置已经是最新状态 / MCP config already up to date：${result.configPath}`,
+			: `MCP 配置未改变 / MCP config unchanged：${result.configPath}`,
+		"info",
+	);
+	ctx.ui.notify(
+		"连接、启用状态及工具暴露方式请在 /mcp 中检查。已禁用的配置不会被自动启用。 / Check connection, enabled state and exposure in /mcp. Disabled entries are not automatically enabled.",
 		"info",
 	);
 	return { reloaded: await maybeReload(ctx, lifecycle) };
 }
 
-async function runSetupGuide(pi, ctx, adapterSnapshot, lifecycle) {
+async function runSetupGuide(pi, ctx, lifecycle) {
 	if (!requireUi(ctx, "引导配置 / Guided setup")) return;
 
 	const exec = extensionExec(pi);
@@ -303,7 +208,14 @@ async function runSetupGuide(pi, ctx, adapterSnapshot, lifecycle) {
 
 		// 4) MCP config
 		if (!status.mcp.configured) {
-			if (status.mcp.conflict) {
+			if (status.mcp.needsMigration) {
+				ctx.ui.notify(MCP_MIGRATION_GUIDANCE, "warning");
+			} else if (status.mcp.disabled || status.mcp.error) {
+				ctx.ui.notify(
+					"MCP 已禁用或配置无效，请先在 /mcp 中检查。 / MCP is disabled or its config is invalid; check /mcp first.",
+					"warning",
+				);
+			} else if (status.mcp.conflict) {
 				ctx.ui.notify(
 					`MCP 配置存在同名冲突 / MCP config name conflict（${status.mcp.configPath || "未知路径 / unknown path"}），请手动检查后重试 / please inspect manually and retry`,
 					"error",
@@ -314,7 +226,7 @@ async function runSetupGuide(pi, ctx, adapterSnapshot, lifecycle) {
 					"尚未配置 kimi-cu MCP。现在写入默认 Pi MCP 配置？ / kimi-cu MCP is not configured. Write the default Pi MCP config now?",
 				);
 				if (approved) {
-					const configured = await configureMcp(pi, ctx, lifecycle, {
+					const configured = await configureMcp(ctx, lifecycle, {
 						interactive: false,
 					});
 					if (configured?.reloaded) return;
@@ -328,62 +240,35 @@ async function runSetupGuide(pi, ctx, adapterSnapshot, lifecycle) {
 			}
 		}
 
-		// 5) MCP connection
-		if (status.mcp.configured && !isMcpConnected(adapterSnapshot)) {
-			const runtime = mcpRuntime(adapterSnapshot);
-			const detail = runtime?.status
-				? `当前运行状态 / Current runtime status：${runtime.status}。`
-				: "当前会话尚未看到 kimi-cu 已连接。/ This session has not seen kimi-cu connected yet. ";
-			const reload = await ctx.ui.confirm(
-				"MCP 尚未连接 / MCP not connected",
-				`${detail}重新加载 Pi 以连接 KimiCU MCP？ / Reload Pi to connect KimiCU MCP?`,
-			);
-			if (reload) {
-				ctx.ui.setStatus("kimi-cu", undefined);
-				lifecycle.reloading = true;
-				await ctx.reload();
-				return;
-			}
+		// Pi owns connection state. Do not infer it from an adapter event or
+		// registered tools (which may remain registered after disconnection).
+		if (status.ready) {
 			ctx.ui.notify(
-				"可稍后运行 /reload，再用 /kimi-cu status 确认连接 / Run /reload later, then /kimi-cu status to verify",
+				"本地环境和配置已就绪；请在 /mcp 中确认 kimi-cu 已连接。 / Local setup is ready; confirm kimi-cu is connected in /mcp.",
 				"info",
 			);
 		}
-
-		if (
-			status.app.installed &&
-			status.service.running &&
-			status.permissions.granted &&
-			status.mcp.configured &&
-			isMcpConnected(adapterSnapshot)
-		) {
-			ctx.ui.notify(
-				"环境已就绪，无需额外配置 / Environment is ready; no further setup needed",
-				"info",
-			);
-		}
-
-		await showStatus(pi, ctx, adapterSnapshot);
+		await showStatus(pi, ctx);
 	} finally {
 		if (!lifecycle.reloading) ctx.ui.setStatus("kimi-cu", undefined);
 	}
 }
 
-async function dispatch(pi, args, ctx, adapterSnapshot, lifecycle) {
+async function dispatch(pi, args, ctx, lifecycle) {
 	const command = args.trim().split(/\s+/)[0]?.toLowerCase() || "menu";
-	if (command === "status") return showStatus(pi, ctx, adapterSnapshot);
+	if (command === "status") return showStatus(pi, ctx);
 	if (
 		command === "setup" ||
 		command === "install" ||
 		command === "repair" ||
 		command === "update"
 	) {
-		return runSetupGuide(pi, ctx, adapterSnapshot, lifecycle);
+		return runSetupGuide(pi, ctx, lifecycle);
 	}
 	if (command === "mcp")
-		return configureMcp(pi, ctx, lifecycle, { interactive: true });
+		return configureMcp(ctx, lifecycle, { interactive: true });
 	if (command !== "menu" && command !== "help") {
-		ctx.ui.notify("用法 / Usage：/kimi-cu [status|setup]", "warning");
+		ctx.ui.notify("用法 / Usage：/kimi-cu [status|setup|mcp]", "warning");
 		return;
 	}
 	if (!requireUi(ctx, "KimiCU 菜单 / menu")) return;
@@ -397,30 +282,31 @@ async function dispatch(pi, args, ctx, adapterSnapshot, lifecycle) {
 		([, label]) => label === selected,
 	)?.[0];
 	if (selectedCommand)
-		return dispatch(pi, selectedCommand, ctx, adapterSnapshot, lifecycle);
+		return dispatch(pi, selectedCommand, ctx, lifecycle);
 }
 
 export default function kimiCuExtension(pi) {
-	let adapterSnapshot;
-	const unsubscribe = pi.events.on(MCP_STATUS_EVENT, (snapshot) => {
-		if (snapshot && typeof snapshot === "object") adapterSnapshot = snapshot;
-	});
-	pi.on("session_shutdown", () => unsubscribe());
-
 	pi.registerCommand("kimi-cu", {
 		description:
 			"检查状态或引导配置 Kimi Computer Use / Check status or guided setup for Kimi Computer Use",
 		getArgumentCompletions: (prefix) => {
-			const values = ["status", "setup"];
+			const values = ["status", "setup", "mcp"];
 			const matches = values.filter((value) => value.startsWith(prefix));
 			return matches.length > 0
 				? matches.map((value) => ({ value, label: value }))
 				: null;
 		},
 		handler: async (args, ctx) => {
+			if (typeof pi.registerMcpServer !== "function") {
+				ctx.ui.notify(
+					"需要 Pi >=0.99.0 的内置 MCP。旧版 Pi 请安装：pi install npm:@specode/pi-kimi-cu@1.0.0 / Requires Pi >=0.99.0 with built-in MCP. On older Pi, pin pi-kimi-cu@1.0.0.",
+					"error",
+				);
+				return;
+			}
 			const lifecycle = { reloading: false };
 			try {
-				await dispatch(pi, args, ctx, adapterSnapshot, lifecycle);
+				await dispatch(pi, args, ctx, lifecycle);
 			} catch (error) {
 				if (lifecycle.reloading) return;
 				ctx.ui.setStatus("kimi-cu", undefined);

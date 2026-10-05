@@ -9,7 +9,7 @@ import {
 	appBinary,
 	appInfoPlist,
 } from "./constants.js";
-import { detectKimiCuMcp, detectPiMcpAdapter } from "./mcp-config.js";
+import { detectKimiCuMcp, MCP_MIGRATION_GUIDANCE } from "./mcp-config.js";
 
 export function parsePermissionStatus(output) {
 	const match =
@@ -87,7 +87,7 @@ export async function detectKimiCu({
 	appPath = DEFAULT_APP_PATH,
 	platform = process.platform,
 	arch = process.arch,
-	mcpConfigPath,
+	projectTrusted = false,
 } = {}) {
 	if (typeof exec !== "function")
 		throw new Error("detectKimiCu requires an exec function");
@@ -145,10 +145,7 @@ export async function detectKimiCu({
 		};
 	}
 
-	const [mcp, adapter] = await Promise.all([
-		detectKimiCuMcp({ cwd, env, home, appPath, overridePath: mcpConfigPath }),
-		detectPiMcpAdapter({ cwd, env, home }),
-	]);
+	const mcp = await detectKimiCuMcp({ cwd, env, home, appPath, projectTrusted });
 
 	return {
 		supported,
@@ -160,7 +157,6 @@ export async function detectKimiCu({
 		service,
 		permissions,
 		mcp,
-		adapter,
 		ready:
 			supported &&
 			app.installed &&
@@ -170,10 +166,10 @@ export async function detectKimiCu({
 	};
 }
 
-export function formatKimiCuStatus(status, adapterSnapshot) {
+export function formatKimiCuStatus(status) {
 	const yesNo = (value) => (value === true ? "是/yes" : "否/no");
 	const lines = [
-		`KimiCU: ${status.ready ? "ready" : "not ready"}`,
+		`KimiCU 本地环境 / Local setup: ${status.ready ? "ready" : "not ready"}`,
 		`平台 / Platform: ${status.platform}/${status.arch}${status.osVersion ? ` · macOS ${status.osVersion}` : ""}${status.supported ? "" : "（要求 / requires macOS 14+ arm64）"}`,
 		`App: ${status.app.installed ? `已安装 / installed${status.app.version ? ` · v${status.app.version}` : ""}` : "缺失 / missing"}`,
 		`后台服务 / Service: ${status.service.running ? "运行中 / running" : "未运行 / not running"}`,
@@ -197,15 +193,15 @@ export function formatKimiCuStatus(status, adapterSnapshot) {
 	}
 
 	lines.push(
-		`MCP 配置 / MCP config: ${status.mcp.configured ? status.mcp.configPath : status.mcp.conflict ? "存在同名冲突 / name conflict" : "未配置 / not configured"}`,
-		`pi-mcp-adapter: ${status.adapter.installed ? "已安装 / installed" : "未检测到（可使用其他 MCP adapter） / not found (other adapters OK)"}`,
+		`MCP 配置 / MCP config: ${status.mcp.configured ? status.mcp.configPath : status.mcp.disabled ? "已禁用 / disabled" : status.mcp.needsMigration ? "旧配置需要迁移 / legacy config needs migration" : status.mcp.error ? "配置读取或校验失败 / invalid or unreadable config" : status.mcp.conflict ? "存在同名冲突 / name conflict" : "未配置 / not configured"}`,
+		"MCP 连接与工具状态 / Connection and tool status: 请使用 Pi 内置 /mcp 检查 / check Pi's built-in /mcp",
 	);
 
-	if (adapterSnapshot && Array.isArray(adapterSnapshot.servers)) {
-		const runtime = adapterSnapshot.servers.find(
-			(server) => server?.name === "kimi-cu",
+	if (status.mcp.needsMigration) lines.push(MCP_MIGRATION_GUIDANCE);
+	for (const diagnostic of status.mcp.diagnostics ?? []) {
+		lines.push(
+			`MCP 配置提示 / Config warning (${diagnostic.configPath}): ${diagnostic.needsMigration ? MCP_MIGRATION_GUIDANCE : diagnostic.error}`,
 		);
-		if (runtime) lines.push(`MCP 运行状态 / MCP runtime: ${runtime.status}`);
 	}
 
 	return lines.join("\n");

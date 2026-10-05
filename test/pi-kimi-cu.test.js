@@ -16,7 +16,6 @@ import test from "node:test";
 import kimiCuExtension from "../extensions/kimi-cu.js";
 import { DEFAULT_APP_PATH, appBinary } from "../src/constants.js";
 import {
-	detectPiMcpAdapter,
 	detectKimiCuMcp,
 	isKnownKimiCuEntry,
 	mergeMcpConfigValue,
@@ -122,37 +121,31 @@ test("merges KimiCU without changing unrelated MCP servers", () => {
 	});
 });
 
-test("migrates legacy mcp-servers and preserves every existing server", () => {
-	const merged = mergeMcpConfigValue({
+test("refuses legacy mcp-servers instead of migrating unrelated servers", () => {
+	const value = {
 		"mcp-servers": {
 			docs: { command: "docs-mcp", args: [] },
-			legacy: { command: "legacy-mcp", args: [] },
+			legacy: { command: "legacy-mcp", args: [], disabled: true },
 		},
 		mcpServers: {
 			docs: { command: "new-docs-mcp", args: [] },
 			search: { command: "search-mcp", args: [] },
 		},
-	});
-
-	assert.equal(merged.changed, true);
-	assert.equal(Object.hasOwn(merged.value, "mcp-servers"), false);
-	assert.equal(merged.value.mcpServers.docs.command, "new-docs-mcp");
-	assert.equal(merged.value.mcpServers.legacy.command, "legacy-mcp");
-	assert.equal(merged.value.mcpServers.search.command, "search-mcp");
-	assert.deepEqual(merged.value.mcpServers["kimi-cu"], {
-		command: appBinary(),
-		args: ["mcp"],
-	});
+	};
+	const original = structuredClone(value);
+	assert.throws(() => mergeMcpConfigValue(value), /不自动迁移/);
+	assert.deepEqual(value, original);
 });
 
-test("migrates only a recognized legacy KimiCU entry", () => {
+test("preserves recognized KimiCU arguments without migrating them", () => {
 	const legacy = {
 		command: appBinary(),
 		args: ["mcp", "-s", "user"],
 	};
 	assert.equal(isKnownKimiCuEntry(legacy), true);
 	const merged = mergeMcpConfigValue({ mcpServers: { "kimi-cu": legacy } });
-	assert.deepEqual(merged.value.mcpServers["kimi-cu"].args, ["mcp"]);
+	assert.equal(merged.changed, false);
+	assert.deepEqual(merged.value.mcpServers["kimi-cu"], legacy);
 
 	assert.throws(
 		() =>
@@ -218,7 +211,7 @@ test("uses the highest-precedence KimiCU MCP definition", async () => {
 				mcpServers: { "kimi-cu": { command: "/custom/kimi-cu", args: [] } },
 			}),
 		);
-		const result = await detectKimiCuMcp({ cwd, home, env: {} });
+		const result = await detectKimiCuMcp({ cwd, home, env: {}, projectTrusted: true });
 		assert.equal(result.configured, false);
 		assert.equal(result.conflict, true);
 		assert.equal(result.configPath, path.join(cwd, ".pi", "mcp.json"));
@@ -227,108 +220,78 @@ test("uses the highest-precedence KimiCU MCP definition", async () => {
 	}
 });
 
-test("merges field-level MCP overrides with adapter precedence", async () => {
-	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-layer-merge-"));
+test("honors native disabled state and trusted project overrides", async () => {
+	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-native-"));
 	try {
-		const home = path.join(root, "home");
-		const cwd = path.join(root, "project");
+		const home = path.join(root, "home"), cwd = path.join(root, "project");
 		const agentDir = path.join(home, ".pi", "agent");
 		await mkdir(agentDir, { recursive: true });
 		await mkdir(path.join(cwd, ".pi"), { recursive: true });
-		await writeFile(
-			path.join(agentDir, "mcp.json"),
-			JSON.stringify({
-				mcpServers: { "kimi-cu": { command: appBinary(), args: ["mcp"] } },
-			}),
-		);
-		await writeFile(
-			path.join(cwd, ".pi", "mcp.json"),
-			JSON.stringify({ mcpServers: { "kimi-cu": { disabled: false } } }),
-		);
-
-		const result = await detectKimiCuMcp({ cwd, home, env: {} });
-		assert.equal(result.configured, true);
-		assert.equal(result.conflict, undefined);
-		assert.equal(result.configPath, path.join(cwd, ".pi", "mcp.json"));
+		await writeFile(path.join(agentDir, "mcp.json"), JSON.stringify({
+			mcpServers: { "kimi-cu": { command: appBinary(), args: ["mcp"], exposure: "direct" } },
+		}));
+		const projectPath = path.join(cwd, ".pi", "mcp.json");
+		await writeFile(projectPath, JSON.stringify({ mcpServers: { "kimi-cu": { enabled: false } } }));
+		assert.equal((await detectKimiCuMcp({ cwd, home, env: {} })).configured, true);
+		assert.deepEqual(await detectKimiCuMcp({ cwd, home, env: {}, projectTrusted: true }), {
+			configured: false, configPath: projectPath, disabled: true,
+		});
+		await writeFile(projectPath, JSON.stringify({ mcpServers: { "kimi-cu": { exposure: "codemode" } } }));
+		assert.equal((await detectKimiCuMcp({ cwd, home, env: {}, projectTrusted: true })).configured, true);
+		// A full project entry replaces, rather than merges with, the global entry.
+		await writeFile(projectPath, JSON.stringify({ mcpServers: { "kimi-cu": { command: appBinary() } } }));
+		assert.equal((await detectKimiCuMcp({ cwd, home, env: {}, projectTrusted: true })).conflict, true);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
 });
 
-test("does not report a disabled KimiCU MCP server as configured", async () => {
-	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-disabled-"));
+test("preserves native settings and refuses legacy disabled entries", () => {
+	const native = {
+		command: appBinary(), args: ["mcp"], enabled: false, exposure: "direct",
+		toolExposure: { get_app_state: "codemode" }, description: "Desktop",
+		env: { EXAMPLE: "value" }, cwd: "/tmp", timeout: 30, type: "stdio",
+	};
+	const merged = mergeMcpConfigValue({ mcpServers: { "kimi-cu": native } });
+	assert.equal(merged.changed, false);
+	assert.deepEqual(merged.value.mcpServers["kimi-cu"], native);
+	assert.equal(isKnownKimiCuEntry(native), false);
+	for (const disabled of [true, false]) {
+		assert.throws(() => mergeMcpConfigValue({ mcpServers: {
+			"kimi-cu": { command: appBinary(), args: ["mcp", "-s", "user"], disabled },
+		} }), /不自动迁移/);
+	}
+	assert.throws(() => mergeMcpConfigValue({ mcpServers: {
+		"kimi-cu": { ...native, socket: "/custom" },
+	} }), /已存在/);
+});
+
+test("ignores adapter-only config paths and reports invalid or legacy native files", async () => {
+	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-native-paths-"));
 	try {
-		const home = path.join(root, "home");
-		const cwd = path.join(root, "project");
+		const home = path.join(root, "home"), cwd = path.join(root, "project");
 		const agentDir = path.join(home, ".pi", "agent");
+		const value = { mcpServers: { "kimi-cu": { command: appBinary(), args: ["mcp"] } } };
+		for (const file of [
+			path.join(home, ".config", "mcp", "mcp.json"),
+			path.join(home, ".agents", "mcp.json"),
+			path.join(home, ".agents", "mcp", "mcp.json"),
+			path.join(cwd, ".mcp.json"),
+		]) {
+			await mkdir(path.dirname(file), { recursive: true });
+			await writeFile(file, JSON.stringify(value));
+		}
+		assert.deepEqual(await detectKimiCuMcp({ cwd, home, env: {} }), { configured: false });
 		await mkdir(agentDir, { recursive: true });
-		await writeFile(
-			path.join(agentDir, "mcp.json"),
-			JSON.stringify({
-				mcpServers: {
-					"kimi-cu": { command: appBinary(), args: ["mcp"], disabled: true },
-				},
-			}),
-		);
-
-		assert.equal(
-			isKnownKimiCuEntry({
-				command: appBinary(),
-				args: ["mcp"],
-				disabled: true,
-			}),
-			false,
-		);
-		const result = await detectKimiCuMcp({ cwd, home, env: {} });
-		assert.deepEqual(result, {
-			configured: false,
-			configPath: path.join(agentDir, "mcp.json"),
-			disabled: true,
-		});
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
-});
-
-test("uses an explicit adapter config path instead of the default Pi global file", async () => {
-	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-override-"));
-	try {
-		const home = path.join(root, "home");
-		const cwd = path.join(root, "project");
-		const overridePath = path.join(root, "custom", "mcp.json");
-		await mkdir(path.dirname(overridePath), { recursive: true });
-		await writeFile(
-			overridePath,
-			JSON.stringify({
-				mcpServers: { "kimi-cu": { command: appBinary(), args: ["mcp"] } },
-			}),
-		);
-
-		const result = await detectKimiCuMcp({ cwd, home, env: {}, overridePath });
-		assert.equal(result.configured, true);
-		assert.equal(result.configPath, overridePath);
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
-});
-
-test("detects pi-mcp-adapter from Pi settings", async () => {
-	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-adapter-"));
-	try {
-		const agentDir = path.join(root, "agent");
-		await mkdir(agentDir, { recursive: true });
-		await writeFile(
-			path.join(agentDir, "settings.json"),
-			JSON.stringify({
-				packages: ["npm:other", { source: "npm:pi-mcp-adapter@2.21.1" }],
-			}),
-		);
-		const result = await detectPiMcpAdapter({
-			cwd: root,
-			home: root,
-			env: { PI_CODING_AGENT_DIR: agentDir },
-		});
-		assert.equal(result.installed, true);
+		const file = path.join(agentDir, "mcp.json");
+		await writeFile(file, "{invalid");
+		assert.ok((await detectKimiCuMcp({ cwd, home, env: {} })).error);
+		await writeFile(file, JSON.stringify({ "mcp-servers": value.mcpServers }));
+		assert.equal((await detectKimiCuMcp({ cwd, home, env: {} })).needsMigration, true);
+		await writeFile(file, JSON.stringify({ mcpServers: {
+			"kimi-cu": { ...value.mcpServers["kimi-cu"], disabled: true },
+		} }));
+		assert.equal((await detectKimiCuMcp({ cwd, home, env: {} })).needsMigration, true);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
@@ -538,66 +501,70 @@ test("accepts an Apple Silicon host when Pi runs as x64 under Rosetta", async ()
 	}
 });
 
-test("writes --mcp-config and never touches a stale context after reload", async () => {
+test("writes trusted project config and never touches a stale context after reload", async () => {
 	const root = await mkdtemp(path.join(tmpdir(), "pi-kimi-cu-reload-"));
+	const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
 	try {
+		process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 		const cwd = path.join(root, "project");
-		const configPath = path.join(root, "custom", "mcp.json");
-		await mkdir(path.join(cwd, ".pi"), { recursive: true });
-		await writeFile(
-			path.join(cwd, ".pi", "settings.json"),
-			JSON.stringify({ packages: ["npm:pi-mcp-adapter"] }),
-		);
-
 		let command;
 		let stale = false;
-		const assertActive = () => {
-			if (stale) throw new Error("stale-context extension error");
-		};
-		const pi = {
-			events: { on: () => () => undefined },
-			on: () => undefined,
-			getFlag: (name) => (name === "mcp-config" ? configPath : undefined),
-			registerCommand: (_name, definition) => {
-				command = definition;
-			},
-			exec: async () => execResult(),
-		};
-		kimiCuExtension(pi);
-
+		const assertActive = () => assert.equal(stale, false, "stale context");
+		kimiCuExtension({
+			registerMcpServer() {},
+			registerCommand: (_name, definition) => { command = definition; },
+			exec: async () => { throw new Error("must not install an adapter"); },
+		});
 		const ctx = {
-			cwd,
-			hasUI: true,
+			cwd, hasUI: true, isProjectTrusted: () => true,
 			ui: {
 				select: async (_title, choices) => {
 					assertActive();
-					return choices[0];
+					assert.equal(choices.length, 3);
+					return choices[1];
 				},
-				confirm: async () => {
-					assertActive();
-					return true;
-				},
+				confirm: async () => { assertActive(); return true; },
 				notify: () => assertActive(),
 				setStatus: () => assertActive(),
-				editor: async () => assertActive(),
-				input: async () => {
-					assertActive();
-					return undefined;
-				},
 			},
-			reload: async () => {
-				assertActive();
-				stale = true;
-			},
+			reload: async () => { assertActive(); stale = true; },
 		};
-
 		await command.handler("mcp", ctx);
-		const value = JSON.parse(await readFile(configPath, "utf8"));
-		assert.deepEqual(value.mcpServers["kimi-cu"], {
-			command: appBinary(),
-			args: ["mcp"],
-		});
+		assert.equal(stale, true);
+		const value = JSON.parse(await readFile(path.join(cwd, ".pi", "mcp.json"), "utf8"));
+		assert.deepEqual(value.mcpServers["kimi-cu"], { command: appBinary(), args: ["mcp"] });
 	} finally {
+		if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+test("old Pi is directed to the legacy plugin without making changes", async () => {
+	let command;
+	const notifications = [];
+	kimiCuExtension({ registerCommand: (_name, definition) => { command = definition; } });
+	await command.handler("setup", { ui: { notify: (message) => notifications.push(message) } });
+	assert.equal(notifications.length, 1);
+	assert.match(notifications[0], /Pi >=0.99.0/);
+	assert.match(notifications[0], /pi-kimi-cu@1.0.0/);
+});
+
+test("untrusted projects are not offered a project config write", async () => {
+	let command;
+	kimiCuExtension({
+		registerMcpServer() {},
+		registerCommand: (_name, definition) => { command = definition; },
+	});
+	await command.handler("mcp", {
+		cwd: "/unused", hasUI: true, isProjectTrusted: () => false,
+		ui: {
+			notify: () => undefined,
+			select: async (_title, choices) => {
+				assert.equal(choices.length, 2);
+				assert.doesNotMatch(choices.join(" "), /Current trusted project|adapter|Custom/);
+				return undefined;
+			},
+		},
+	});
 });

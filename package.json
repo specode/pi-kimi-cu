@@ -1,6 +1,6 @@
 {
   "name": "@specode/pi-kimi-cu",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Lightweight Kimi Computer Use installer and MCP setup for Pi",
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,13 @@
     "url": "https://github.com/specode/pi-kimi-cu/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.99.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": { "optional": true }
   },
   "publishConfig": {
     "access": "public"
