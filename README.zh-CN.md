@@ -1,92 +1,90 @@
 # pi-kimi-cu
 
-[English](./README.md)
+[English](./README.md) | [简体中文](./README.zh-CN.md)
 
-面向 Pi 的轻量级 [Kimi Computer Use](https://www.kimi.com/) 安装与接入包，跑在 macOS 上，不依赖 Kimi Code。
+在 macOS 上为 [Pi](https://github.com/earendil-works/pi-mono) 一键安装并接入 [Kimi Computer Use](https://www.kimi.com/)（`KimiCU.app`）——无需依赖 Kimi Code，即可让 Pi 查看并操作 macOS 桌面应用（点击、输入、滚动、拖拽与窗口截图）。
 
-## 能做什么
+- **交互式引导配置**：执行 `/kimi-cu` 即可自动排查环境缺口，按需完成 `KimiCU.app` 下载安装、后台服务启动、系统权限引导与 MCP 配置写入。
+- **原生接入 Pi MCP**：直接使用 Pi 内置的 MCP 客户端，无需安装任何第三方 adapter 插件。
+- **自带桌面控制 Skill**：内置 `kimi-cu` 技能说明，连接成功后 AI 即可按规范操作 macOS 图形界面。
+- **签名校验与安全回滚**：安装前严格校验 Bundle ID、`arm64` 架构、开发者 Team ID 与 `codesign` 签名，并在临时目录完成原子替换与故障回滚。
 
-- `/kimi-cu`：两个入口——检查状态、引导配置
-- 安全安装 `KimiCU.app`：下到临时目录、校验、带回滚替换，再清理现场
-- 注册 launchd 后台服务；权限交给官方 KimiCU App 窗口处理
-- 使用 Pi 内置 MCP，不安装或依赖第三方 adapter
-- 引导配置写入 Pi 全局配置；`/kimi-cu mcp` 可选择全局、当前可信项目或只显示片段
-- 一份接好后给 Pi 用的 KimiCU skill
+---
 
-## 环境要求
+## 前置依赖
 
-- Apple Silicon Mac
-- macOS 14 及以上
-- [Pi](https://pi.dev) **>=0.99.0**，并启用内置 MCP（推荐 1.0.2 或更新版本）
-- Node.js >=22.19.0
+- **Apple Silicon Mac**（`arm64`）
+- **macOS 14 (Sonoma)** 及以上版本
+- **[Pi](https://pi.dev) >= 0.99.0**，并启用内置 MCP（推荐 `1.0.2` 及以上版本）
+- **Node.js >= 22.19.0**
 
-本包 **2.x** 仅支持内置 MCP。旧版 Pi（<0.99.0）请固定使用旧插件，不要升级到 2.x：
+> **正在使用旧版 Pi（`< 0.99.0`）？** `2.x` 版本仅支持 Pi 内置 MCP。若使用旧版 Pi + `pi-mcp-adapter`，请固定安装 `1.0.0`：
+> ```bash
+> pi install npm:@specode/pi-kimi-cu@1.0.0
+> ```
 
-```bash
-pi install npm:@specode/pi-kimi-cu@1.0.0
-```
-
-旧插件的 adapter 接入方式保持不变；本包不会自动降级或安装旧 adapter。
+---
 
 ## 安装
 
-从 npm：
+从 npm 安装：
 
 ```bash
 pi install npm:@specode/pi-kimi-cu
 ```
 
-从 git：
+或从 GitHub 安装：
 
 ```bash
 pi install git:github.com/specode/pi-kimi-cu
 ```
 
-本地目录：
+从本地目录安装：
 
 ```bash
 pi install ~/Code/pi-kimi-cu
 ```
 
-重启 Pi，然后执行：
+---
+
+## 快速开始
+
+1. **安装后重启 Pi**，执行命令打开交互式向导：
 
 ```text
 /kimi-cu
 ```
 
-可用命令：
+2. **跟随向导补齐缺失项**（`/kimi-cu setup`）：
+   - **未安装 App** → 自动从 Moonshot AI 官方 CDN 下载、验签并安装 `KimiCU.app`。
+   - **后台服务未运行** → 注册并启动 `launchd` 后台服务。
+   - **缺少系统权限** → 自动打开 `KimiCU.app`，引导你在官方界面中开启 **辅助功能 (Accessibility)** 与 **屏幕录制 (Screen Recording)** 权限。
+   - **未配置 MCP** → 自动将 `kimi-cu` 写入 `~/.pi/agent/mcp.json` 并提示执行 `/reload`。
+
+3. **确认 MCP 实时连接状态**：
 
 ```text
-/kimi-cu status   # 检查状态
-/kimi-cu setup    # 引导配置
+/mcp
 ```
 
-## 交互说明
+连接就绪后，直接用自然语言向 Pi 下达桌面任务即可，例如：*“帮我截一下 iOS 模拟器的窗口，然后点击登录按钮。”*
 
-1. **检查状态**：平台、App、后台服务、权限、MCP 配置与运行状态。
-2. **引导配置**：按缺口逐步处理——
-   - App 未安装 → 询问是否下载安装
-   - 后台服务未运行 → 询问是否注册启动
-   - 权限未齐 → 打开 KimiCU App，请你在官方窗口里确认 Accessibility / Screen Recording
-   - MCP 未配置 → 询问是否写入默认 Pi MCP 配置
-   - 配置写入后 → 询问是否 `/reload`；连接状态以 Pi 内置 `/mcp` 为准
+---
 
-## MCP
+## 命令与 MCP 配置
 
-默认使用 `~/.pi/agent/mcp.json`（遵从 `PI_CODING_AGENT_DIR`），可信项目可使用 `.pi/mcp.json`。不再读取 adapter 的共享路径、项目 `.mcp.json` 或 `--mcp-config`。
+### 常用命令
 
-从旧版迁移：
+| 命令 | 说明 |
+| --- | --- |
+| `/kimi-cu` | 打开交互菜单：选择检查状态或进入引导配置 |
+| `/kimi-cu status` | 检查系统架构、`KimiCU.app`、后台服务、系统权限及本地 MCP 配置状态 |
+| `/kimi-cu setup` | 针对未就绪的环节执行分步引导安装与配置 |
+| `/kimi-cu mcp` | 选择将 MCP 配置写入全局（`~/.pi/agent/mcp.json`）、当前受信任项目（`.pi/mcp.json`）或仅展示 JSON 片段 |
 
-1. 先备份旧 adapter 配置。现在可以自行卸载 `pi-mcp-adapter`，或在 `pi config` 中禁用它，改用 Pi 内置 MCP；注册了 `/mcp` 的 adapter 会阻止内置 MCP 接管。
-2. 自行把需要保留的服务器复制到 Pi 的 `mcp.json`，放在 `mcpServers` 下，并调整 adapter 专用字段：尤其要把 `disabled: true` 改为 `enabled: false`，删除旧 `disabled` 字段，不要原样复制 `mcp-servers`。
-3. 本包不自动迁移、卸载或删除任何旧配置。`/kimi-cu mcp` 只添加缺失的 KimiCU 条目或展示片段；遇到旧配置会保留原文件并提示手动处理。
-4. 完成上述操作后再 `/reload`，在内置 `/mcp` 中确认 `kimi-cu` 的启用状态、连接和工具暴露方式；内置 MCP 被禁用时，先在 `pi config` 的 Built-in 中启用。
+### 手动配置片段
 
-`/kimi-cu status` 只检查本地环境和配置，不把配置存在或工具已注册误报为“已连接”。默认 `codemode` 暴露方式下通过 `searchTools()` 发现工具；也可在 `/mcp` 中改为 `direct`。
-
-Pi >=1.0.1 支持项目仅覆盖 `enabled`、`exposure`、`toolExposure`；0.99.x/1.0.0 请使用完整项目定义。禁用请用 `enabled: false`。已有原生设置和命令参数保持不变，旧字段不会被自动转换。
-
-通用片段：
+默认写入 `~/.pi/agent/mcp.json`（自动遵循 `PI_CODING_AGENT_DIR` 环境变量）：
 
 ```json
 {
@@ -99,15 +97,40 @@ Pi >=1.0.1 支持项目仅覆盖 `enabled`、`exposure`、`toolExposure`；0.99.
 }
 ```
 
-写入配置时，遇到旧 `mcp-servers`、KimiCU 的 `disabled` 字段、同名自定义 server、`kimi_cu` 等命名空间冲突，或损坏、不可读的目标文件都会停止，不覆盖原内容；冲突检查也覆盖生效的全局配置和可信项目配置。如果全局已有同名条目，也不会新建完整项目定义，以免静默覆盖继承的禁用状态、工具限制或其他设置；请在 `/mcp` 中明确调整，全局 JSON 或根节点、服务器映射结构无效时，也会先停止创建项目定义，要求修复；已有项目条目保持不变。状态检测会把诊断与有效配置分开：损坏的文件或非法服务器字段不会遮蔽另一层的有效定义；合法的自定义项目服务器仍优先于全局配置，并报告冲突。
+- **工具暴露方式**：在默认的 `codemode` 模式下，Agent 会通过 `searchTools()` 按需发现桌面操作工具；若希望直接声明全部工具，可在 `/mcp` 面板中将其切换为 `direct`。
+- **项目级覆盖**：Pi `>= 1.0.1` 支持在受信任项目的 `.pi/mcp.json` 中仅覆盖 `enabled`、`exposure` 或 `toolExposure`；`0.99.x` / `1.0.0` 则需编写完整的 server 定义。如需禁用服务，请设置 `"enabled": false`。
 
-## 安全说明
+---
 
-App 从 Moonshot AI 官方 CDN 下载。安装前会检查 Bundle ID、arm64 架构、签名 Team ID，并做严格 `codesign` 校验。签名校验失败时默认中止；只有你在交互提示里明确确认后才会继续。
+## 设计思路与安全边界
 
-辅助功能和屏幕录制由官方 KimiCU App 引导授权，本包不会代你拨动系统开关。
+### 非破坏性配置保护
 
-## 开发检查
+`/kimi-cu mcp` 在写入配置时遵循“绝不静默覆盖用户自定义配置”的原则：
+
+- 遇到损坏的 JSON 文件、旧版 `mcp-servers` 字段、旧版 `disabled` 字段、同名自定义服务或命名空间冲突（如 `kimi_cu`）时会立即中止并给出提示，保留原文件不变。
+- 当全局配置已存在 `kimi-cu` 条目时，不会在项目中新建完整同名定义，防止静默覆盖全局继承的禁用状态或工具权限限制（请直接使用 `/mcp` 调整）。
+- 状态诊断与实际生效配置分离：单层配置文件的语法错误不会掩盖另一层的有效定义。
+
+### 安全与隐私边界
+
+- **安装前严格验签**：`KimiCU.app` 从 Moonshot AI 官方 CDN 下载至临时目录后，会依次校验 Bundle ID、`arm64` 架构、签名 Team ID 并执行严格的 `codesign` 验证；验签失败默认直接中止安装。
+- **权限完全由用户掌控**：辅助功能与屏幕录制权限均交由官方 `KimiCU.app` 窗口引导授权，本扩展绝不在后台私自修改 macOS 系统权限开关。
+- **真实状态反馈**：`/kimi-cu status` 仅反映本地安装与配置文件状态，不会将“配置文件存在”误报为“服务已连接”；实时连接状态以 Pi 内置 `/mcp` 为准。
+
+---
+
+## 从 v1.x（`pi-mcp-adapter`）迁移
+
+如果你此前使用过基于 `pi-mcp-adapter` 的 `1.x` 版本：
+
+1. 备份旧配置后卸载 `pi-mcp-adapter`，或在 `pi config` 中将其禁用（注册了 `/mcp` 的第三方 adapter 会阻止 Pi 内置 MCP 接管）。
+2. 将需要保留的服务器手动迁移到 `~/.pi/agent/mcp.json` 的 `"mcpServers"` 下；注意将旧字段 `"disabled": true` 改为 `"enabled": false` 并移除 `disabled`。
+3. 执行 `/reload`，通过内置 `/mcp` 检查 `kimi-cu` 连接状态（若内置 MCP 未开启，请先在 `pi config` 的 **Built-in** 中启用）。
+
+---
+
+## 本地开发
 
 ```bash
 npm run check
@@ -115,4 +138,4 @@ npm run check
 
 ## 许可证
 
-MIT
+[MIT](./LICENSE)
