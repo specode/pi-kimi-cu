@@ -2,28 +2,27 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-在 macOS 上为 [Pi](https://github.com/earendil-works/pi-mono) 一键安装并接入 [Kimi Computer Use](https://www.kimi.com/)（`KimiCU.app`）——无需依赖 Kimi Code，即可让 Pi 查看并操作 macOS 桌面应用（点击、输入、滚动、拖拽与窗口截图）。
+一个 macOS 上的 [Pi](https://github.com/earendil-works/pi-mono) 扩展与技能包：安装 [Kimi Computer Use](https://www.kimi.com/)（`KimiCU.app`）并接入 Pi 内置的 MCP 客户端，让 Pi 查看和操作桌面应用。
 
-- **交互式引导配置**：执行 `/kimi-cu` 即可自动排查环境缺口，按需完成 `KimiCU.app` 下载安装、后台服务启动、系统权限引导与 MCP 配置写入。
-- **原生接入 Pi MCP**：直接使用 Pi 内置的 MCP 客户端，无需安装任何第三方 adapter 插件。
-- **自带桌面控制 Skill**：内置 `kimi-cu` 技能说明，连接成功后 AI 即可按规范操作 macOS 图形界面。
-- **签名校验与安全回滚**：安装前严格校验 Bundle ID、`arm64` 架构、开发者 Team ID 与 `codesign` 签名，并在临时目录完成原子替换与故障回滚。
+`/kimi-cu status` 输出示例：
 
----
+```text
+KimiCU 本地环境 / Local setup: ready
+平台 / Platform: darwin/arm64 · macOS 15.4
+App: 已安装 / installed · v0.1.0
+后台服务 / Service: 运行中 / running
+权限 / Permissions: 辅助功能、屏幕录制均已授权 / Accessibility & Screen Recording granted
+MCP 配置 / MCP config: ~/.pi/agent/mcp.json
+MCP 连接与工具状态 / Connection and tool status: 请使用 Pi 内置 /mcp 检查 / check Pi's built-in /mcp
+```
 
-## 前置依赖
+## 环境要求
 
-- **Apple Silicon Mac**（`arm64`）
-- **macOS 14 (Sonoma)** 及以上版本
-- **[Pi](https://pi.dev) >= 0.99.0**，并启用内置 MCP（推荐 `1.0.2` 及以上版本）
-- **Node.js >= 22.19.0**
+- Apple Silicon Mac（`arm64`），系统版本 macOS 14 (Sonoma) 及以上
+- [Pi](https://pi.dev) >= 0.99.0，并开启内置 MCP（推荐 1.0.2 及以上版本）
+- Node.js >= 22.19.0
 
-> **正在使用旧版 Pi（`< 0.99.0`）？** `2.x` 版本仅支持 Pi 内置 MCP。若使用旧版 Pi + `pi-mcp-adapter`，请固定安装 `1.0.0`：
-> ```bash
-> pi install npm:@specode/pi-kimi-cu@1.0.0
-> ```
-
----
+如果使用的是 Pi 0.99.0 以前的版本并搭配 `pi-mcp-adapter`，请安装 `npm:@specode/pi-kimi-cu@1.0.0`。
 
 ## 安装
 
@@ -33,58 +32,42 @@
 pi install npm:@specode/pi-kimi-cu
 ```
 
-或从 GitHub 安装：
+从 GitHub 安装：
 
 ```bash
 pi install git:github.com/specode/pi-kimi-cu
 ```
 
-从本地目录安装：
+从本地目录安装（开发调试）：
 
 ```bash
-pi install ~/Code/pi-kimi-cu
+pi install /path/to/pi-kimi-cu
 ```
 
----
+安装后重启 Pi 生效。
 
-## 快速开始
+## 使用说明
 
-1. **安装后重启 Pi**，执行命令打开交互式向导：
+1. 执行 `/kimi-cu`（或 `/kimi-cu setup`）进入引导配置。
+2. 向导会依次检查以下环节，并在每一步操作前先询问确认：
+   - 若未安装 `/Applications/KimiCU.app`，从 Moonshot AI 官方 CDN 下载并验签安装。
+   - 若 `launchd` 后台服务（`ai.kimi.cu.service`）未运行，注册并启动该服务。
+   - 若未授予系统权限，打开 `KimiCU.app`，由你在官方窗口和系统设置中开启辅助功能（Accessibility）与屏幕录制（Screen Recording）权限。
+   - 将 `kimi-cu` 写入 `~/.pi/agent/mcp.json`，并询问是否立即执行 `/reload`。
+3. 执行 `/mcp` 查看 MCP 实时连接状态。连接就绪后，即可直接让 Pi 操作桌面应用（点击、输入、滚动、拖拽或截取窗口画面）。
 
-```text
-/kimi-cu
-```
-
-2. **跟随向导补齐缺失项**（`/kimi-cu setup`）：
-   - **未安装 App** → 自动从 Moonshot AI 官方 CDN 下载、验签并安装 `KimiCU.app`。
-   - **后台服务未运行** → 注册并启动 `launchd` 后台服务。
-   - **缺少系统权限** → 自动打开 `KimiCU.app`，引导你在官方界面中开启 **辅助功能 (Accessibility)** 与 **屏幕录制 (Screen Recording)** 权限。
-   - **未配置 MCP** → 自动将 `kimi-cu` 写入 `~/.pi/agent/mcp.json` 并提示执行 `/reload`。
-
-3. **确认 MCP 实时连接状态**：
-
-```text
-/mcp
-```
-
-连接就绪后，直接用自然语言向 Pi 下达桌面任务即可，例如：*“帮我截一下 iOS 模拟器的窗口，然后点击登录按钮。”*
-
----
-
-## 命令与 MCP 配置
-
-### 常用命令
+### 命令
 
 | 命令 | 说明 |
 | --- | --- |
-| `/kimi-cu` | 打开交互菜单：选择检查状态或进入引导配置 |
-| `/kimi-cu status` | 检查系统架构、`KimiCU.app`、后台服务、系统权限及本地 MCP 配置状态 |
-| `/kimi-cu setup` | 针对未就绪的环节执行分步引导安装与配置 |
-| `/kimi-cu mcp` | 选择将 MCP 配置写入全局（`~/.pi/agent/mcp.json`）、当前受信任项目（`.pi/mcp.json`）或仅展示 JSON 片段 |
+| `/kimi-cu` | 打开菜单，选择检查状态或运行引导配置 |
+| `/kimi-cu status` | 检查系统架构、`KimiCU.app`、后台服务、系统权限及本地 MCP 配置文件状态 |
+| `/kimi-cu setup` | 按步骤引导安装和配置缺失的组件 |
+| `/kimi-cu mcp` | 将 MCP 配置写入 `~/.pi/agent/mcp.json`（全局）、`.pi/mcp.json`（受信任项目）或仅查看 JSON 片段 |
 
-### 手动配置片段
+## 配置
 
-默认写入 `~/.pi/agent/mcp.json`（自动遵循 `PI_CODING_AGENT_DIR` 环境变量）：
+`/kimi-cu mcp` 默认向 `~/.pi/agent/mcp.json`（跟随 `PI_CODING_AGENT_DIR`）写入以下配置：
 
 ```json
 {
@@ -97,45 +80,33 @@ pi install ~/Code/pi-kimi-cu
 }
 ```
 
-- **工具暴露方式**：在默认的 `codemode` 模式下，Agent 会通过 `searchTools()` 按需发现桌面操作工具；若希望直接声明全部工具，可在 `/mcp` 面板中将其切换为 `direct`。
-- **项目级覆盖**：Pi `>= 1.0.1` 支持在受信任项目的 `.pi/mcp.json` 中仅覆盖 `enabled`、`exposure` 或 `toolExposure`；`0.99.x` / `1.0.0` 则需编写完整的 server 定义。如需禁用服务，请设置 `"enabled": false`。
+- 在默认的 `codemode` 暴露方式下，Agent 通过 `searchTools()` 按需查找 KimiCU 工具；如果希望直接声明所有工具，可在 `/mcp` 中将其改为 `direct`。
+- 在 Pi 1.0.1 及以上版本中，受信任项目的 `.pi/mcp.json` 可以只覆盖 `enabled`、`exposure` 或 `toolExposure`；Pi 0.99.x 和 1.0.0 需写入完整服务定义。如需禁用服务，可设置 `"enabled": false`。
 
----
-
-## 设计思路与安全边界
-
-### 非破坏性配置保护
-
-`/kimi-cu mcp` 在写入配置时遵循“绝不静默覆盖用户自定义配置”的原则：
-
-- 遇到损坏的 JSON 文件、旧版 `mcp-servers` 字段、旧版 `disabled` 字段、同名自定义服务或命名空间冲突（如 `kimi_cu`）时会立即中止并给出提示，保留原文件不变。
-- 当全局配置已存在 `kimi-cu` 条目时，不会在项目中新建完整同名定义，防止静默覆盖全局继承的禁用状态或工具权限限制（请直接使用 `/mcp` 调整）。
-- 状态诊断与实际生效配置分离：单层配置文件的语法错误不会掩盖另一层的有效定义。
-
-### 安全与隐私边界
-
-- **安装前严格验签**：`KimiCU.app` 从 Moonshot AI 官方 CDN 下载至临时目录后，会依次校验 Bundle ID、`arm64` 架构、签名 Team ID 并执行严格的 `codesign` 验证；验签失败默认直接中止安装。
-- **权限完全由用户掌控**：辅助功能与屏幕录制权限均交由官方 `KimiCU.app` 窗口引导授权，本扩展绝不在后台私自修改 macOS 系统权限开关。
-- **真实状态反馈**：`/kimi-cu status` 仅反映本地安装与配置文件状态，不会将“配置文件存在”误报为“服务已连接”；实时连接状态以 Pi 内置 `/mcp` 为准。
-
----
-
-## 从 v1.x（`pi-mcp-adapter`）迁移
-
-如果你此前使用过基于 `pi-mcp-adapter` 的 `1.x` 版本：
+### 从 v1.x（`pi-mcp-adapter`）迁移
 
 1. 备份旧配置后卸载 `pi-mcp-adapter`，或在 `pi config` 中将其禁用（注册了 `/mcp` 的第三方 adapter 会阻止 Pi 内置 MCP 接管）。
-2. 将需要保留的服务器手动迁移到 `~/.pi/agent/mcp.json` 的 `"mcpServers"` 下；注意将旧字段 `"disabled": true` 改为 `"enabled": false` 并移除 `disabled`。
-3. 执行 `/reload`，通过内置 `/mcp` 检查 `kimi-cu` 连接状态（若内置 MCP 未开启，请先在 `pi config` 的 **Built-in** 中启用）。
+2. 将需要保留的服务迁移到 `~/.pi/agent/mcp.json` 的 `"mcpServers"` 下，把旧字段 `"disabled": true` 改为 `"enabled": false` 并删掉 `disabled`。
+3. 执行 `/reload`，在内置 `/mcp` 中检查 `kimi-cu` 连接状态（如未开启内置 MCP，先在 `pi config` 的 **Built-in** 中启用）。
 
----
+## 隐私与安全
+
+- 仅在你确认后从 Moonshot AI 官方 CDN（`https://cdn.kimi.com/kimi-computer-use/latest/KimiCU.app.zip`）下载 `KimiCU.app`。
+- 替换 `/Applications/KimiCU.app` 前，安装器会在临时目录中依次校验 Bundle ID（`ai.kimi.cu`）、`arm64` 架构、开发者 Team ID（`2J9472RW75`）和 `codesign` 签名，失败时自动回滚。
+- 辅助功能与屏幕录制权限均由你在官方 `KimiCU.app` 窗口和 macOS 系统设置中手动授权，本扩展不会私自修改系统 TCC 权限库。
+- `/kimi-cu mcp` 遇到损坏的 JSON、旧版 `mcp-servers` 或 `disabled` 字段、同名自定义服务或 `kimi_cu` 命名空间冲突时会直接中止，保留原文件不变；全局已存在 `kimi-cu` 时也不会在项目中重复写入完整定义。
+- `/kimi-cu status` 只报告本地安装与配置文件状态，实时连接状态以 Pi 内置 `/mcp` 为准。
 
 ## 本地开发
 
 ```bash
+# 语法检查并运行测试
 npm run check
+
+# 检查打包文件列表
+npm run pack:check
 ```
 
 ## 许可证
 
-[MIT](./LICENSE)
+[MIT](./LICENSE)。
